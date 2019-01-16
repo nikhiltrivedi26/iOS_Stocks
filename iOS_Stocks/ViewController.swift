@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import ChameleonFramework
 
 class ViewController: UITableViewController {
     
@@ -32,21 +33,41 @@ class ViewController: UITableViewController {
         var textField3 = UITextField()
         
         let alert = UIAlertController(title: "Add Stock", message: "", preferredStyle: .alert)
-        let action = UIAlertAction(title: "Add", style: .default) { (action) in
-            
-            // determine the current price of the stock
-            self.findCurrPrice(symbol: textField1.text!)
-            self.semaphore.wait()
-            
-            let nowPrice: String = self.currValue as! String
         
-            let stock = Stock(symbol: textField1.text!, numShares: Int(textField2.text!)!, userPrice: Double(textField3.text!)!, currPrice: nowPrice)
-            
-            self.stockArray.append(stock)
-            self.tableView.reloadData()
+        let cancel = UIAlertAction(title: "Cancel", style: .default) { (cancel) in
+            alert.dismiss(animated: true, completion: nil)
+        }
+        let action = UIAlertAction(title: "Add", style: .default) { (action) in
+            // error checking
+            if(textField1.text == "" || textField2.text == "" || textField3.text == "") {
+                print("error - empty field ")
+            }
+            else if(Int(textField2.text!) == nil) {
+                print("error - stock quantity must be an int")
+            }
+            else if(Double(textField3.text!) == nil) {
+                print("error - num shares must be a double")
+            }
+                // determine the current price of the stock
+            else {
+                var nowPrice: String = ""
+                self.currValue = ""
+                self.findCurrPrice(symbol: textField1.text!)
+                self.semaphore.wait()
+                nowPrice = self.currValue as! String
+                if(nowPrice == "") {
+                    print("error - could not find a stock with the given name")
+                }
+                else {
+                    let stock = Stock(symbol: (textField1.text!), numShares: Int(textField2.text!)!, userPrice: Double(textField3.text!)!, currPrice: nowPrice)
+                    self.stockArray.append(stock)
+                    self.tableView.reloadData()
+                }
+            }
         }
         
         alert.addAction(action)
+        alert.addAction(cancel)
         
         alert.addTextField { (field) in
             textField1 = field
@@ -65,6 +86,10 @@ class ViewController: UITableViewController {
         tableView.reloadData()
     }
     
+    func isStringAnInt(string: String) -> Bool {
+        return Int(string) != nil
+    }
+    
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return stockArray.count
     }
@@ -73,19 +98,19 @@ class ViewController: UITableViewController {
         
         let cell = tableView.dequeueReusableCell(withIdentifier: "Stock", for: indexPath)
         
-        // 11 is ideal for first break
         var netGain: Double
-        netGain = ((Double(stockArray[indexPath.row].currPrice)! * Double(stockArray[indexPath.row].numShares))) - Double(stockArray[indexPath.row].userPrice * Double(stockArray[indexPath.row].numShares))
+        netGain = (Double(stockArray[indexPath.row].currPrice)! - Double(stockArray[indexPath.row].userPrice)) * Double(stockArray[indexPath.row].numShares)
+        netGain = netGain.rounded()
         let netGainString: String = String(netGain)
         
-        cell.textLabel?.text = "[" + stockArray[indexPath.row].symbol + "] [" + String(stockArray[indexPath.row].numShares) + "] [" + String(stockArray[indexPath.row].userPrice) + "] [" + netGainString + "]"
+        cell.textLabel?.text = "[" + stockArray[indexPath.row].symbol + "] [" + String(stockArray[indexPath.row].numShares) + "] [" + String(stockArray[indexPath.row].userPrice.rounded()) + "] [" + netGainString + "]"
         
         if(netGain < 0) {
-            cell.backgroundColor = UIColor.red
+            cell.backgroundColor = FlatWatermelon()
         } else if(netGain == 0){
-            cell.backgroundColor = UIColor.gray
+            cell.backgroundColor = FlatWhite()
         } else {
-            cell.backgroundColor = UIColor.green
+            cell.backgroundColor = FlatGreen()
         }
         
         return cell
@@ -96,28 +121,33 @@ class ViewController: UITableViewController {
         let apiKey = "JWPUFO3613UG07D8"
         let url = URL(string: "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=\(symbol)&apikey=\(apiKey)")
         
-        URLSession.shared.dataTask(with: url!) { (data, response, error) in
-            if error != nil {
-                print ("error")
-            } else {
-                if let content = data {
-                    do {
-                        let myJson = try JSONSerialization.jsonObject(with: content, options: JSONSerialization.ReadingOptions.mutableContainers) as AnyObject
-                        if let time = myJson["Global Quote"] as? NSDictionary  {
-                            for (key, value) in time {
-                                let test2: Any = (key as Any)
-                                if ((test2 as AnyObject) as! String) == "02. open" {
-                                    self.currValue = value
-                                    self.semaphore.signal()
+        if(url == nil) {
+            print("error finding stock information")
+            self.semaphore.signal()
+        } else {
+            URLSession.shared.dataTask(with: (url)!) { (data, response, error) in
+                if error != nil {
+                    print ("error")
+                } else {
+                    if let content = data {
+                        do {
+                            let myJson = try JSONSerialization.jsonObject(with: content, options: JSONSerialization.ReadingOptions.mutableContainers) as AnyObject
+                            if let time = myJson["Global Quote"] as? NSDictionary  {
+                                for (key, value) in time {
+                                    let modifiedKey: Any = (key as Any)
+                                    if ((modifiedKey as AnyObject) as! String) == "02. open" {
+                                        self.currValue = value
+                                        self.semaphore.signal()
+                                    }
                                 }
                             }
-                        }
-                    }  catch  {
-                        print(error.localizedDescription)
+                        }  catch  {}
+                    } else {
+                        print("error finding stock information")
                     }
                 }
-            }
-        }.resume()
+            }.resume()
+        }
     }
     
 }
