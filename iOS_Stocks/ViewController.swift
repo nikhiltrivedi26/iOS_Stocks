@@ -137,11 +137,12 @@ class ViewController: UITableViewController {
                                     let modifiedKey: Any = (key as Any)
                                     if ((modifiedKey as AnyObject) as! String) == "02. open" {
                                         self.currValue = value
-                                        self.semaphore.signal()
+//                                        self.semaphore.signal()
                                     }
                                 }
                             }
                         }  catch  {}
+                        self.semaphore.signal()
                     } else {
                         print("error finding stock information")
                     }
